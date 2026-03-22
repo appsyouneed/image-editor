@@ -1,14 +1,4 @@
----
-title: Qwen Image Edit Rapid AIO (NSFW)
-emoji: 🌍
-colorFrom: pink
-colorTo: pink
-sdk: gradio
-sdk_version: 6.1.0
-app_file: app.py
-pinned: true
-tags:
-  - not-for-all-audiences
----
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+1. Connect to vps
+2. Clone this repo
+3. cd to /imageeditor
+4. Run bash setup.sh
