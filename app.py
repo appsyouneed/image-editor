@@ -540,15 +540,51 @@ body, .gradio-container {
 .contain {
     padding: 0 !important;
 }
+#preset-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+#preset-row > * {
+    flex: 1 !important;
+}
+#preset-row button {
+    flex: 0 0 auto !important;
+    min-width: 80px !important;
+}
 """
 
 with gr.Blocks(css=css) as demo:
     with gr.Column(elem_id="col-container"):
-        gr.HTML("""
-        <div style="text-align: center;">
-            <h1>Image Editor</h1>
-        </div>
-        """)
+        with gr.Row(elem_id="preset-row"):
+            preset_dropdown = gr.Dropdown(
+                label="Quick Prompts",
+                choices=[
+                    "Lift Up Vag Flash",
+                    "Same Place Sitting Tease",
+                    "Same Place Shh Tease",
+                    "Same Place Shh Tease 2",
+                    "1 Leg Up Inviting Tease",
+                    "Same Place Squatting Frontal",
+                    "Dick Holding Pleasure Tease",
+                    "Dick Holding Almost BJ",
+                    "Same Place Partial BJ",
+                    "Side View Oral",
+                    "Remove Her Clothes",
+                    "Secret Silent Sex",
+                    "Rear View Anal",
+                    "Spread On Bed Pose",
+                    "Come Get It Pose",
+                    "Secret Silent Room Sex",
+                    "Front View Couch Sex",
+                    "Rear View Couch Sex"
+                ],
+                value=None,
+                interactive=True,
+                show_label=False
+            )
+            run_button_top = gr.Button("Edit!", variant="primary", size="sm")
+        
         with gr.Row():
             with gr.Column():
                 input_images = gr.Gallery(label="Input Images", 
@@ -558,7 +594,6 @@ with gr.Blocks(css=css) as demo:
 
             with gr.Column():
                 result = gr.Gallery(label="Result", show_label=False, type="pil", interactive=False)
-                # Add this button right after the result gallery - initially hidden
                 use_output_btn = gr.Button("↗️ Use as input", variant="secondary", size="sm", visible=False)
 
         with gr.Row():
@@ -571,33 +606,6 @@ with gr.Blocks(css=css) as demo:
                     max_lines=10,
             )
             run_button = gr.Button("Edit!", variant="primary")
-
-        # Preset prompt dropdown
-        preset_dropdown = gr.Dropdown(
-            label="Quick Prompts",
-            choices=[
-                "Lift Up Vag Flash",
-                "Same Place Sitting Tease",
-                "Same Place Shh Tease",
-                "Same Place Shh Tease 2",
-                "1 Leg Up Inviting Tease",
-                "Same Place Squatting Frontal",
-                "Dick Holding Pleasure Tease",
-                "Dick Holding Almost BJ",
-                "Same Place Partial BJ",
-                "Side View Oral",
-                "Remove Her Clothes",
-                "Secret Silent Sex",
-                "Rear View Anal",
-                "Spread On Bed Pose",
-                "Come Get It Pose",
-                "Secret Silent Room Sex",
-                "Front View Couch Sex",
-                "Rear View Couch Sex"
-            ],
-            value=None,
-            interactive=True
-        )
 
         num_images_per_prompt = gr.Slider(
             label="Number of images",
@@ -699,11 +707,12 @@ with gr.Blocks(css=css) as demo:
     preset_dropdown.change(
         fn=update_prompt_from_dropdown,
         inputs=[preset_dropdown],
-        outputs=[prompt]
+        outputs=[prompt],
+        scroll_to_output=False
     )
 
     gr.on(
-        triggers=[run_button.click, prompt.submit],
+        triggers=[run_button.click, run_button_top.click, prompt.submit],
         fn=infer,
         inputs=[
             input_images,
