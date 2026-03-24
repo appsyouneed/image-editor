@@ -77,6 +77,38 @@ import torch.nn.functional as F
 # ---------------------------------------------------------------------------
 # CHANGE 2 of 4: BASE PIPELINE — auto-download to local models folder
 # ---------------------------------------------------------------------------
+def setup_intelligent_memory_pipeline(pipe):
+    """Intelligent memory management based on actual VRAM availability"""
+    if not torch.cuda.is_available():
+        print("No GPU detected - using CPU only")
+        return pipe.to("cpu")
+    
+    torch.cuda.empty_cache()
+    total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(f"Total VRAM: {total_vram:.1f}GB, Model size: ~55GB")
+    
+    # Model is ~55GB, so we need intelligent thresholds
+    if total_vram >= 80:  # Blackwell B200, H100, etc
+        print("Enterprise GPU: Loading fully on GPU")
+        return pipe.to("cuda")
+    elif total_vram >= 60:  # Some high-end cards
+        print("High-end GPU: Loading fully on GPU with memory optimization")
+        torch.cuda.set_per_process_memory_fraction(0.95)
+        return pipe.to("cuda")
+    elif total_vram >= 20:  # RTX 4090, A6000, etc
+        print("Consumer high-end: Using model CPU offloading")
+        pipe.enable_model_cpu_offload()
+        return pipe
+    elif total_vram >= 10:  # GTX 1080 Ti, RTX 3080, etc
+        print("Mid-range GPU: Using sequential CPU offloading") 
+        pipe.enable_sequential_cpu_offload()
+        return pipe
+    else:
+        print("Low VRAM: CPU-only mode")
+        return pipe.to("cpu")
+
 print("loading base pipeline architecture...")
 
 # Auto-download if not present
@@ -87,7 +119,8 @@ if not os.path.exists(BASE_MODEL_LOCAL_PATH):
         "Qwen/Qwen-Image-Edit-2511",
         torch_dtype=torch.bfloat16,
         cache_dir=MODELS_DIR,
-    ).to("cuda")
+    )
+    pipe = setup_intelligent_memory_pipeline(pipe)
     # Save locally for future use
     pipe.save_pretrained(BASE_MODEL_LOCAL_PATH)
 else:
@@ -96,7 +129,8 @@ else:
         BASE_MODEL_LOCAL_PATH,
         torch_dtype=torch.bfloat16,
         local_files_only=True,
-    ).to("cuda")
+    )
+    pipe = setup_intelligent_memory_pipeline(pipe)
 
 # force euler ancestral scheduler
 #pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)

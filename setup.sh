@@ -56,7 +56,6 @@ echo "[5/8] Creating local model directories..."
 mkdir -p /models && chmod 777 /models
 mkdir -p /models/Qwen-Image-Edit-2511
 mkdir -p /models/rapid-aio/v23
-mkdir -p /models/Qwen2.5-VL-7B-Instruct
 
 # -----------------------------------------------------------
 # STEP 6: Download models from Hugging Face
@@ -73,9 +72,7 @@ $HF_BIN download Phr00t/Qwen-Image-Edit-Rapid-AIO \
     --include "v23/Qwen-Rapid-AIO-NSFW-v23.safetensors" \
     --local-dir /models/rapid-aio
 
-echo "  -> Downloading Local Rewriter..."
-$HF_BIN download Qwen/Qwen2.5-VL-7B-Instruct \
-    --local-dir /models/Qwen2.5-VL-7B-Instruct
+
 
 # -----------------------------------------------------------
 # STEP 7: Verify GPU accessibility
@@ -85,8 +82,16 @@ echo "[7/8] Verifying GPU accessibility..."
 python3 -c "
 import torch
 print(f'CUDA Available: {torch.cuda.is_available()}')
-print(f'GPU Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')
+if torch.cuda.is_available():
+    print(f'GPU Device: {torch.cuda.get_device_name(0)}')
+    total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    print(f'Total VRAM: {total_vram:.1f}GB')
+else:
+    print('GPU Device: None')
 "
+
+# Set memory optimization environment variables
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # -----------------------------------------------------------
 # STEP 8: Export environment variables
@@ -95,8 +100,6 @@ echo ""
 echo "[8/8] Setting environment variables..."
 export BASE_MODEL_PATH="/models/Qwen-Image-Edit-2511"
 export NSFW_WEIGHTS_PATH="/models/rapid-aio/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors"
-export REWRITER_MODEL_PATH="/models/Qwen2.5-VL-7B-Instruct"
-
 # Persist them to ~/.bashrc so they survive reboots
 grep -qxF 'export BASE_MODEL_PATH="/models/Qwen-Image-Edit-2511"' ~/.bashrc || \
     echo 'export BASE_MODEL_PATH="/models/Qwen-Image-Edit-2511"' >> ~/.bashrc
@@ -104,15 +107,14 @@ grep -qxF 'export BASE_MODEL_PATH="/models/Qwen-Image-Edit-2511"' ~/.bashrc || \
 grep -qxF 'export NSFW_WEIGHTS_PATH="/models/rapid-aio/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors"' ~/.bashrc || \
     echo 'export NSFW_WEIGHTS_PATH="/models/rapid-aio/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors"' >> ~/.bashrc
 
-grep -qxF 'export REWRITER_MODEL_PATH="/models/Qwen2.5-VL-7B-Instruct"' ~/.bashrc || \
-    echo 'export REWRITER_MODEL_PATH="/models/Qwen2.5-VL-7B-Instruct"' >> ~/.bashrc
+grep -qxF 'export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True' ~/.bashrc || \
+    echo 'export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True' >> ~/.bashrc
 
 echo ""
 echo "============================================="
 echo "  Setup Complete!"
 echo "  BASE_MODEL_PATH     = $BASE_MODEL_PATH"
 echo "  NSFW_WEIGHTS_PATH   = $NSFW_WEIGHTS_PATH"
-echo "  REWRITER_MODEL_PATH = $REWRITER_MODEL_PATH"
 echo "============================================="
 echo ""
 echo "  Press ENTER to start the server..."
