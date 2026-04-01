@@ -7,26 +7,57 @@
 #   cd imageeditor && bash setup.sh
 # =============================================================
 
-set -e  # Exit immediately if any command fails
-
 echo "============================================="
 echo "  Image Editor - Full Setup"
 echo "============================================="
+
+# -----------------------------------------------------------
+# STEP 0: Find fastest PyPI mirror
+# -----------------------------------------------------------
+echo ""
+echo "[0/8] Testing PyPI mirrors for fastest connection..."
+
+MIRRORS=(
+    "https://pypi.org/simple"
+    "https://mirrors.aliyun.com/pypi/simple"
+    "https://pypi.tuna.tsinghua.edu.cn/simple"
+    "https://pypi.mirrors.ustc.edu.cn/simple"
+)
+
+FASTEST_MIRROR=""
+FASTEST_TIME=999999
+
+for mirror in "${MIRRORS[@]}"; do
+    echo -n "  Testing $mirror ... "
+    TIME=$(timeout 10 curl -o /dev/null -s -w '%{time_total}' --connect-timeout 10 --max-time 10 "$mirror" 2>/dev/null || echo "999")
+    echo "${TIME}s"
+    if (( $(echo "$TIME < $FASTEST_TIME" | bc -l) )); then
+        FASTEST_TIME=$TIME
+        FASTEST_MIRROR=$mirror
+    fi
+done
+
+echo ""
+echo "  Selected fastest mirror: $FASTEST_MIRROR (${FASTEST_TIME}s)"
+PIP_INDEX="--index-url $FASTEST_MIRROR"
 
 # -----------------------------------------------------------
 # STEP 1: Update system & install core dependencies
 # -----------------------------------------------------------
 echo ""
 echo "[1/8] Updating system and installing core dependencies..."
-apt update && apt install -y python3-pip git-lfs python3.12-venv
+apt update && apt install -y python3-pip git-lfs python3.12-venv bc
 
 # -----------------------------------------------------------
 # STEP 2: Install core AI libraries globally
 # -----------------------------------------------------------
 echo ""
 echo "[2/8] Installing core AI libraries..."
-python3 -m pip install gradio diffusers transformers accelerate safetensors \
-    --break-system-packages --ignore-installed
+python3 -c "import gradio" 2>/dev/null || python3 -m pip install gradio $PIP_INDEX --break-system-packages
+python3 -c "import diffusers" 2>/dev/null || python3 -m pip install diffusers $PIP_INDEX --break-system-packages
+python3 -c "import transformers" 2>/dev/null || python3 -m pip install transformers $PIP_INDEX --break-system-packages
+python3 -c "import accelerate" 2>/dev/null || python3 -m pip install accelerate $PIP_INDEX --break-system-packages
+python3 -c "import safetensors" 2>/dev/null || python3 -m pip install safetensors $PIP_INDEX --break-system-packages
 
 # -----------------------------------------------------------
 # STEP 3: Install app requirements from the cloned repo
@@ -34,7 +65,12 @@ python3 -m pip install gradio diffusers transformers accelerate safetensors \
 echo ""
 echo "[3/8] Installing app Python dependencies..."
 if [ -f "requirements.txt" ]; then
-    python3 -m pip install -r requirements.txt --break-system-packages
+    python3 -c "import sentencepiece" 2>/dev/null || python3 -m pip install sentencepiece $PIP_INDEX --break-system-packages
+    python3 -c "import dashscope" 2>/dev/null || python3 -m pip install dashscope $PIP_INDEX --break-system-packages
+    python3 -c "import kernels" 2>/dev/null || python3 -m pip install kernels $PIP_INDEX --break-system-packages
+    python3 -c "import torchvision" 2>/dev/null || python3 -m pip install torchvision $PIP_INDEX --break-system-packages
+    python3 -c "import peft" 2>/dev/null || python3 -m pip install peft $PIP_INDEX --break-system-packages
+    python3 -c "import torchao" 2>/dev/null || python3 -m pip install torchao==0.11.0 $PIP_INDEX --break-system-packages
 else
     echo "  WARNING: requirements.txt not found in current directory, skipping."
 fi
@@ -44,7 +80,11 @@ fi
 # -----------------------------------------------------------
 echo ""
 echo "[4/8] Installing Hugging Face CLI..."
-curl -LsSf https://hf.co/cli/install.sh | bash -s -- --force
+if [ ! -f "/root/.local/bin/hf" ]; then
+    curl -LsSf https://hf.co/cli/install.sh | bash -s -- --force
+else
+    echo "  Hugging Face CLI already installed, skipping."
+fi
 
 HF_BIN="/root/.local/bin/hf"
 
@@ -63,14 +103,22 @@ mkdir -p /models/rapid-aio/v23
 echo ""
 echo "[6/8] Downloading models (this may take a while)..."
 
-echo "  -> Downloading Base Model..."
-$HF_BIN download Qwen/Qwen-Image-Edit-2511 \
-    --local-dir /models/Qwen-Image-Edit-2511
+if [ -f "/models/Qwen-Image-Edit-2511/model.safetensors" ] || [ -f "/models/Qwen-Image-Edit-2511/pytorch_model.bin" ]; then
+    echo "  -> Base Model already downloaded, skipping."
+else
+    echo "  -> Downloading Base Model..."
+    $HF_BIN download Qwen/Qwen-Image-Edit-2511 \
+        --local-dir /models/Qwen-Image-Edit-2511
+fi
 
-echo "  -> Downloading NSFW Weights (v23)..."
-$HF_BIN download Phr00t/Qwen-Image-Edit-Rapid-AIO \
-    --include "v23/Qwen-Rapid-AIO-NSFW-v23.safetensors" \
-    --local-dir /models/rapid-aio
+if [ -f "/models/rapid-aio/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors" ]; then
+    echo "  -> NSFW Weights already downloaded, skipping."
+else
+    echo "  -> Downloading NSFW Weights (v23)..."
+    $HF_BIN download Phr00t/Qwen-Image-Edit-Rapid-AIO \
+        --include "v23/Qwen-Rapid-AIO-NSFW-v23.safetensors" \
+        --local-dir /models/rapid-aio
+fi
 
 
 
