@@ -1,30 +1,30 @@
 # Image Editor Service Commands
 
 ## Setup (run once)
-sudo cp image-editor.service /etc/systemd/system/
+sudo cp picgen.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable image-editor
+sudo systemctl enable picgen
 
 ## Start the service
-sudo systemctl start image-editor
+sudo systemctl start picgen
 
 ## Stop the service
-sudo systemctl stop image-editor
+sudo systemctl stop picgen
 
 ## Restart the service
-sudo systemctl restart image-editor
+sudo systemctl restart picgen
 
 ## Check status
-sudo systemctl status image-editor
+sudo systemctl status picgen
 
 ## View logs (live)
-sudo journalctl -u image-editor -f
+sudo journalctl -u picgen -f
 
 ## View logs (last 100 lines)
-sudo journalctl -u image-editor -n 100
+sudo journalctl -u picgen -n 100
 
 ## Disable service (prevent auto-start on boot)
-sudo systemctl disable image-editor
+sudo systemctl disable picgen
 
 ## Kill the process manually (if needed)
 sudo pkill -f "python3.*app.py"

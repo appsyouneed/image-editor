@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # =============================================================
-# Combined Setup Script - Image Editor (GitHub Source)
+# Combined Setup Script - picgen (GitHub Source)
 # Run this from your local machine / Termux after cloning:
-#   git clone https://github.com/appsyouneed/imageeditor.git
-#   cd imageeditor && bash setup.sh
+#   git clone https://github.com/appsyouneed/picgen.git
+#   cd picgen && bash setup.sh
 # =============================================================
 
 echo "============================================="
-echo "  Image Editor - Full Setup"
+echo "  picgen - Full Setup"
 echo "============================================="
 
 # -----------------------------------------------------------
@@ -49,15 +49,31 @@ echo "[1/8] Updating system and installing core dependencies..."
 apt update && apt install -y python3-pip git-lfs python3.12-venv bc
 
 # -----------------------------------------------------------
+# STEP 1.5: Create virtual environment
+# -----------------------------------------------------------
+echo ""
+echo "[1.5/8] Creating virtual environment..."
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    echo "  Virtual environment created."
+else
+    echo "  Virtual environment already exists."
+fi
+
+# Activate virtual environment
+source venv/bin/activate
+echo "  Virtual environment activated."
+
+# -----------------------------------------------------------
 # STEP 2: Install core AI libraries globally
 # -----------------------------------------------------------
 echo ""
 echo "[2/8] Installing core AI libraries..."
-python3 -c "import gradio" 2>/dev/null || python3 -m pip install gradio $PIP_INDEX --break-system-packages
-python3 -c "import diffusers" 2>/dev/null || python3 -m pip install diffusers $PIP_INDEX --break-system-packages
-python3 -c "import transformers" 2>/dev/null || python3 -m pip install transformers $PIP_INDEX --break-system-packages
-python3 -c "import accelerate" 2>/dev/null || python3 -m pip install accelerate $PIP_INDEX --break-system-packages
-python3 -c "import safetensors" 2>/dev/null || python3 -m pip install safetensors $PIP_INDEX --break-system-packages
+python3 -c "import gradio" 2>/dev/null || pip install gradio $PIP_INDEX
+python3 -c "import diffusers" 2>/dev/null || pip install diffusers $PIP_INDEX
+python3 -c "import transformers" 2>/dev/null || pip install transformers $PIP_INDEX
+python3 -c "import accelerate" 2>/dev/null || pip install accelerate $PIP_INDEX
+python3 -c "import safetensors" 2>/dev/null || pip install safetensors $PIP_INDEX
 
 # -----------------------------------------------------------
 # STEP 3: Install app requirements from the cloned repo
@@ -65,12 +81,12 @@ python3 -c "import safetensors" 2>/dev/null || python3 -m pip install safetensor
 echo ""
 echo "[3/8] Installing app Python dependencies..."
 if [ -f "requirements.txt" ]; then
-    python3 -c "import sentencepiece" 2>/dev/null || python3 -m pip install sentencepiece $PIP_INDEX --break-system-packages
-    python3 -c "import dashscope" 2>/dev/null || python3 -m pip install dashscope $PIP_INDEX --break-system-packages
-    python3 -c "import kernels" 2>/dev/null || python3 -m pip install kernels $PIP_INDEX --break-system-packages
-    python3 -c "import torchvision" 2>/dev/null || python3 -m pip install torchvision $PIP_INDEX --break-system-packages
-    python3 -c "import peft" 2>/dev/null || python3 -m pip install peft $PIP_INDEX --break-system-packages
-    python3 -c "import torchao" 2>/dev/null || python3 -m pip install torchao==0.11.0 $PIP_INDEX --break-system-packages
+    python3 -c "import sentencepiece" 2>/dev/null || pip install sentencepiece $PIP_INDEX
+    python3 -c "import dashscope" 2>/dev/null || pip install dashscope $PIP_INDEX
+    python3 -c "import kernels" 2>/dev/null || pip install kernels $PIP_INDEX
+    python3 -c "import torchvision" 2>/dev/null || pip install torchvision $PIP_INDEX
+    python3 -c "import peft" 2>/dev/null || pip install peft $PIP_INDEX
+    python3 -c "import torchao" 2>/dev/null || pip install torchao==0.11.0 $PIP_INDEX
 else
     echo "  WARNING: requirements.txt not found in current directory, skipping."
 fi
@@ -173,4 +189,5 @@ read -r
 source ~/.bashrc
 
 echo "Starting server..."
+source venv/bin/activate
 python3 app.py --share

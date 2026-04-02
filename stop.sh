@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sudo systemctl stop image-editor.service
-sudo systemctl disable image-editor.service
+sudo systemctl stop picgen.service
+sudo systemctl disable picgen.service
 
-echo "✓ Image editor service stopped!"
+echo "✓ picgen service stopped!"

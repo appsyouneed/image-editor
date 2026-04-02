@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-echo "=== Switching from image-editor to vidgen ==="
+echo "=== Switching from picgen to vidgen ==="
 
-# Stop and disable image-editor
-sudo systemctl stop image-editor.service 2>/dev/null || true
-sudo systemctl disable image-editor.service 2>/dev/null || true
+# Stop and disable picgen
+sudo systemctl stop picgen.service 2>/dev/null || true
+sudo systemctl disable picgen.service 2>/dev/null || true
 
 # Kill any remaining Python processes
 sudo pkill -9 python3 2>/dev/null || true
