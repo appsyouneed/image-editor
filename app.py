@@ -153,18 +153,18 @@ def setup_intelligent_memory_pipeline(pipe):
 
 print("loading base pipeline architecture...")
 
-# Auto-download if not present
-if not os.path.exists(BASE_MODEL_LOCAL_PATH):
+# Auto-download if not present - check for model_index.json
+model_index_path = os.path.join(BASE_MODEL_LOCAL_PATH, "model_index.json")
+if not os.path.exists(model_index_path):
     print(f"Base model not found. Downloading to {BASE_MODEL_LOCAL_PATH}...")
     os.makedirs(MODELS_DIR, exist_ok=True)
+    # Download directly to local path
     pipe = QwenImageEditPlusPipeline.from_pretrained(
         "Qwen/Qwen-Image-Edit-2511",
         torch_dtype=torch.bfloat16,
-        cache_dir=MODELS_DIR,
+        cache_dir=BASE_MODEL_LOCAL_PATH,
     )
     pipe = setup_intelligent_memory_pipeline(pipe)
-    # Save locally for future use
-    pipe.save_pretrained(BASE_MODEL_LOCAL_PATH)
 else:
     print(f"Loading from local path: {BASE_MODEL_LOCAL_PATH}")
     pipe = QwenImageEditPlusPipeline.from_pretrained(
