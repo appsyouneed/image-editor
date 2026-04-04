@@ -7,7 +7,7 @@ echo "Creating cache directory..."
 mkdir -p /root/.cache/huggingface
 
 echo "Installing system dependencies..."
-apt-get update && apt-get install -y python3-pip ffmpeg wget git git-lfs bc
+apt-get update && apt-get install -y python3-pip python3-venv ffmpeg wget git git-lfs bc
 
 echo "Installing PyTorch with CUDA 12.4 support..."
 pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --break-system-packages --ignore-installed
@@ -16,11 +16,7 @@ echo "Installing Python dependencies..."
 pip3 install -r requirements.txt --break-system-packages --ignore-installed
 
 echo "Installing Hugging Face CLI..."
-if [ ! -f "/root/.local/bin/hf" ]; then
-    curl -LsSf https://hf.co/cli/install.sh | bash -s -- --force
-else
-    echo "Hugging Face CLI already installed, skipping..."
-fi
+pip3 install huggingface_hub[cli] --break-system-packages
 
 echo "Creating local model directories..."
 mkdir -p models/Qwen-Image-Edit-2511
@@ -30,8 +26,8 @@ chmod -R 777 models
 echo "=== Model Download ==="
 echo "Models will be downloaded automatically on first run."
 echo "To pre-download models now, run:"
-echo "  /root/.local/bin/hf download Qwen/Qwen-Image-Edit-2511 --local-dir models/Qwen-Image-Edit-2511"
-echo "  /root/.local/bin/hf download Phr00t/Qwen-Image-Edit-Rapid-AIO --include 'v23/Qwen-Rapid-AIO-NSFW-v23.safetensors' --local-dir models/rapid-aio"
+echo "  huggingface-cli download Qwen/Qwen-Image-Edit-2511 --local-dir models/Qwen-Image-Edit-2511"
+echo "  huggingface-cli download Phr00t/Qwen-Image-Edit-Rapid-AIO --include 'v23/Qwen-Rapid-AIO-NSFW-v23.safetensors' --local-dir models/rapid-aio"
 
 echo "Verifying GPU accessibility..."
 python3 -c "
