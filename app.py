@@ -97,7 +97,7 @@ from torchao.quantization import quantize_, Int8WeightOnlyConfig, Float8DynamicA
 # ---------------------------------------------------------------------------
 # INTELLIGENT MEMORY MANAGEMENT - Works on any GPU
 # ---------------------------------------------------------------------------
-def setup_intelligent_memory_pipeline(pipe):
+def setup_intelligent_memory_pipeline(pipe, apply_quantization=True):
     """Intelligent memory management based on actual VRAM availability"""
     if not torch.cuda.is_available():
         print("No GPU detected - using CPU only")
@@ -110,12 +110,13 @@ def setup_intelligent_memory_pipeline(pipe):
     print(f"Total VRAM: {total_vram:.1f}GB")
     print(f"Base model size: ~55GB unquantized, ~20GB with quantization")
     
-    # Apply quantization to reduce memory footprint
-    print("Applying quantization on CPU...")
-    if hasattr(pipe, 'text_encoder') and pipe.text_encoder is not None:
-        quantize_(pipe.text_encoder, Int8WeightOnlyConfig())
-    if hasattr(pipe, 'transformer') and pipe.transformer is not None:
-        quantize_(pipe.transformer, Float8DynamicActivationFloat8WeightConfig())
+    # Apply quantization to reduce memory footprint (only if requested)
+    if apply_quantization:
+        print("Applying quantization on CPU...")
+        if hasattr(pipe, 'text_encoder') and pipe.text_encoder is not None:
+            quantize_(pipe.text_encoder, Int8WeightOnlyConfig())
+        if hasattr(pipe, 'transformer') and pipe.transformer is not None:
+            quantize_(pipe.transformer, Float8DynamicActivationFloat8WeightConfig())
     
     # Enable VAE optimizations for all GPUs
     print("Enabling VAE slicing and tiling...")
@@ -164,7 +165,7 @@ if not os.path.exists(model_index_path):
         torch_dtype=torch.bfloat16,
         cache_dir=BASE_MODEL_LOCAL_PATH,
     )
-    pipe = setup_intelligent_memory_pipeline(pipe)
+    # Don't apply memory management yet - need to load NSFW weights first
 else:
     print(f"Loading from local path: {BASE_MODEL_LOCAL_PATH}")
     pipe = QwenImageEditPlusPipeline.from_pretrained(
@@ -172,7 +173,7 @@ else:
         torch_dtype=torch.bfloat16,
         local_files_only=True,
     )
-    pipe = setup_intelligent_memory_pipeline(pipe)
+    # Don't apply memory management yet - need to load NSFW weights first
 
 # force euler ancestral scheduler
 #pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
@@ -272,7 +273,7 @@ if len(text_encoder_weights) > 0:
     # text encoder structure can vary wildly, strict=False is mandatory here
     pipe.text_encoder.load_state_dict(text_encoder_weights, strict=False)
 
-# 5. CLEANUP & RUN
+# 5. CLEANUP & APPLY MEMORY MANAGEMENT
 # ------------------------------------------------------------------------------
 del state_dict
 del transformer_weights
@@ -280,6 +281,10 @@ del vae_weights
 del text_encoder_weights
 gc.collect()
 torch.cuda.empty_cache()
+
+# NOW apply quantization and memory management after weights are loaded
+print("Applying memory optimizations after weight injection...")
+pipe = setup_intelligent_memory_pipeline(pipe, apply_quantization=True)
 
 
 #################################
