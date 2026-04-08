@@ -30,12 +30,11 @@ import json
 # ---------------------------------------------------------------------------
 import platform
 
-BASE_MODEL_LOCAL_PATH = os.environ.get(
-    "BASE_MODEL_PATH", "/models/Qwen-Image-Edit-2511"
-)
-NSFW_WEIGHTS_LOCAL_PATH = os.environ.get(
-    "NSFW_WEIGHTS_PATH", "/models/rapid-aio/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors"
-)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.path.join(SCRIPT_DIR, "models")
+
+BASE_MODEL_LOCAL_PATH = os.path.join(MODELS_DIR, "Qwen-Image-Edit-2511")
+NSFW_WEIGHTS_LOCAL_PATH = os.path.join(MODELS_DIR, "rapid-aio", "v23", "Qwen-Rapid-AIO-NSFW-v23.safetensors")
 
 # Detect operating system
 IS_WINDOWS = platform.system() == "Windows"
@@ -88,11 +87,27 @@ from safetensors.torch import load_file
 import torch.nn.functional as F
 
 print("loading base pipeline architecture...")
-pipe = QwenImageEditPlusPipeline.from_pretrained(
-    BASE_MODEL_LOCAL_PATH,
-    torch_dtype=torch.bfloat16,
-    local_files_only=True,
-).to("cuda")
+
+# Auto-download if not present
+model_index_path = os.path.join(BASE_MODEL_LOCAL_PATH, "model_index.json")
+if not os.path.exists(model_index_path):
+    print(f"Base model not found. Downloading to {BASE_MODEL_LOCAL_PATH}...")
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    pipe = QwenImageEditPlusPipeline.from_pretrained(
+        "Qwen/Qwen-Image-Edit-2511",
+        torch_dtype=torch.bfloat16,
+        cache_dir=MODELS_DIR,
+    )
+    pipe.save_pretrained(BASE_MODEL_LOCAL_PATH)
+else:
+    print(f"Loading from local path: {BASE_MODEL_LOCAL_PATH}")
+    pipe = QwenImageEditPlusPipeline.from_pretrained(
+        BASE_MODEL_LOCAL_PATH,
+        torch_dtype=torch.bfloat16,
+        local_files_only=True,
+    )
+
+pipe = pipe.to("cuda")
 
 # force euler ancestral scheduler
 #pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
@@ -103,7 +118,21 @@ pipe = QwenImageEditPlusPipeline.from_pretrained(
 # CHANGE 3 of 4: NSFW WEIGHTS — auto-download to local models folder
 # ---------------------------------------------------------------------------
 print("accessing v23 checkpoint...")
-v23_path = NSFW_WEIGHTS_LOCAL_PATH
+
+# Auto-download if not present
+if not os.path.exists(NSFW_WEIGHTS_LOCAL_PATH):
+    print(f"NSFW weights not found. Downloading to {NSFW_WEIGHTS_LOCAL_PATH}...")
+    os.makedirs(os.path.dirname(NSFW_WEIGHTS_LOCAL_PATH), exist_ok=True)
+    v23_path = hf_hub_download(
+        repo_id="Phr00t/Qwen-Image-Edit-Rapid-AIO",
+        filename="v23/Qwen-Rapid-AIO-NSFW-v23.safetensors",
+        cache_dir=MODELS_DIR,
+        local_dir=os.path.join(MODELS_DIR, "rapid-aio"),
+        local_dir_use_symlinks=False,
+    )
+else:
+    print(f"Loading from local path: {NSFW_WEIGHTS_LOCAL_PATH}")
+    v23_path = NSFW_WEIGHTS_LOCAL_PATH
 
 print(f"loading 28GB state dict into cpu memory...")
 state_dict = load_file(v23_path)
