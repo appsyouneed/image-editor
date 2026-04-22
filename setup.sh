@@ -7,16 +7,46 @@ echo "Creating cache directory..."
 mkdir -p /root/.cache/huggingface
 
 echo "Installing system dependencies..."
-apt-get update && apt-get install -y python3-pip python3-venv ffmpeg wget git git-lfs bc
+apt-get update && apt-get install -y python3-pip python3-venv ffmpeg wget git git-lfs bc curl
 
-echo "Installing PyTorch (auto-detect system CUDA)..."
-pip3 install torch torchvision --break-system-packages --ignore-installed
+# --- CUDA 12.4 Toolkit (if not already installed) ---
+if ! command -v nvcc &> /dev/null; then
+    echo "CUDA not found. Installing CUDA 12.4 toolkit..."
+    UBUNTU_VERSION=$(lsb_release -rs | tr -d '.')
+    CUDA_DEB="cuda-keyring_1.1-1_all.deb"
+    wget -q "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${UBUNTU_VERSION}/x86_64/${CUDA_DEB}"
+    dpkg -i "$CUDA_DEB"
+    apt-get update
+    apt-get install -y cuda-toolkit-12-4
+    rm -f "$CUDA_DEB"
+    export PATH=/usr/local/cuda-12.4/bin:$PATH
+    export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH
+    echo 'export PATH=/usr/local/cuda-12.4/bin:$PATH' >> /root/.bashrc
+    echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH' >> /root/.bashrc
+    echo "CUDA 12.4 installed."
+else
+    echo "CUDA already installed: $(nvcc --version | head -1)"
+fi
+
+# Upgrade pip only if needed
+if python3 -m pip install --upgrade pip --dry-run 2>&1 | grep -q "Would install"; then
+    echo "Upgrading pip..."
+    python3 -m pip install --upgrade pip
+else
+    echo "pip already up to date, skipping."
+fi
+
+echo "Installing PyTorch with CUDA 12.4 support..."
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --break-system-packages --ignore-installed
 
 echo "Installing Python dependencies..."
 pip3 install -r requirements.txt --break-system-packages --ignore-installed
 
 echo "Installing Hugging Face CLI..."
 pip3 install huggingface_hub[cli] --break-system-packages
+
+echo "Fixing pyOpenSSL compatibility..."
+python3 -c "from OpenSSL import SSL" 2>/dev/null || pip3 install --upgrade pyopenssl --break-system-packages
 
 echo "Creating local model directories..."
 mkdir -p models/Qwen-Image-Edit-2511
