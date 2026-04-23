@@ -6,11 +6,15 @@ echo "=== Picgen Image Editor VPS Setup ==="
 UBUNTU_VER=$(lsb_release -rs)
 if (( $(echo "$UBUNTU_VER < 24" | bc -l) )); then
     echo "Ubuntu $UBUNTU_VER detected: upgrading pip first..."
-    pip3 install --upgrade pip
+    pip install --upgrade pip
 fi
 
 echo "Creating cache directory..."
 mkdir -p /root/.cache/huggingface
+
+echo "Creating Python virtual environment..."
+python3 -m venv /root/picgen/venv
+source /root/picgen/venv/bin/activate
 
 echo "Installing system dependencies..."
 apt-get update && apt-get install -y python3-pip python3-venv ffmpeg wget git git-lfs bc curl
@@ -43,16 +47,16 @@ else
 fi
 
 echo "Installing PyTorch with CUDA 12.4 support..."
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --break-system-packages --ignore-installed
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --ignore-installed
 
 echo "Installing Python dependencies..."
-pip3 install -r requirements.txt --break-system-packages --ignore-installed
+pip install -r requirements.txt --ignore-installed
 
 echo "Installing Hugging Face CLI..."
-pip3 install huggingface_hub[cli] --break-system-packages
+pip install "huggingface_hub[cli]>=1.5.0"
 
 echo "Fixing pyOpenSSL compatibility..."
-python3 -c "from OpenSSL import SSL" 2>/dev/null || pip3 install --upgrade pyopenssl --break-system-packages
+python3 -c "from OpenSSL import SSL" 2>/dev/null || pip install --upgrade pyopenssl
 
 echo "Creating local model directories..."
 mkdir -p models/Qwen-Image-Edit-2511
@@ -91,6 +95,9 @@ echo "  systemctl start picgen   - Start picgen"
 echo "  systemctl stop picgen    - Stop picgen"
 echo "  systemctl status picgen  - Check status"
 echo "  systemctl restart picgen - Restart picgen"
+echo ""
+echo "View live output:"
+echo "  tail -f /root/picgen/picgen.log"
 echo ""
 echo "To run manually: python3 app.py"
 echo "The app will be accessible at: http://0.0.0.0:7860"

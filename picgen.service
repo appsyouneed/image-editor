@@ -10,7 +10,7 @@ Environment="PYTHONUNBUFFERED=1"
 Environment="HF_HOME=/root/.cache/huggingface"
 Environment="PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True"
 Environment="CUDA_LAUNCH_BLOCKING=0"
-ExecStart=/usr/bin/python3 /root/picgen/app.py
+ExecStart=/root/picgen/venv/bin/python /root/picgen/app.py
 Restart=always
 RestartSec=10
 StandardOutput=append:/root/picgen/picgen.log
