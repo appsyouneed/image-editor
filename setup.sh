@@ -18,7 +18,7 @@ if (( $(echo "$UBUNTU_VER < 24" | bc -l) )); then
 fi
 
 echo "Installing system dependencies..."
-apt-get update && apt-get install -y python3-pip python3-venv python3.10-venv ffmpeg wget git git-lfs bc curl
+apt-get update && apt-get install -y python3-pip python3-venv ffmpeg wget git git-lfs bc curl
 
 echo "Creating cache directory..."
 mkdir -p /root/.cache/huggingface
@@ -55,8 +55,8 @@ else
     echo "pip already up to date, skipping."
 fi
 
-echo "Installing PyTorch with CUDA 12.4 support..."
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --ignore-installed
+echo "Installing PyTorch with CUDA 12.8 support..."
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128 --ignore-installed
 
 echo "Installing Python dependencies..."
 pip install -r "$SCRIPT_DIR/requirements.txt" --ignore-installed

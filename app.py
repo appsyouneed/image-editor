@@ -246,29 +246,41 @@ torch.cuda.empty_cache()
 # --- UI Constants and Helpers ---
 MAX_SEED = np.iinfo(np.int32).max
 
-def use_output_as_input(output_images):
-    """Convert output images to input format for the gallery"""
-    if output_images is None or len(output_images) == 0:
-        return []
-    return output_images
-
-def add_starter_image(starter_num, current_images):
-    """Add a starter image to the current gallery"""
-    from PIL import Image
-    import os
-    
-    starter_path = f"starters/start{starter_num}.jpg"
+def add_starter_image(starter_num):
+    """Return base64 of a starter image for the custom uploader"""
+    starter_path = os.path.join(SCRIPT_DIR, f"starters/start{starter_num}.jpg")
     if not os.path.exists(starter_path):
-        return current_images
-    
-    img = Image.open(starter_path)
-    if current_images is None:
-        return [img]
-    return list(current_images) + [img]
+        return ""
+    with open(starter_path, "rb") as f:
+        data = f.read()
+    b64 = base64.b64encode(data).decode()
+    return f"data:image/jpeg;base64,{b64}"
 
-# --- Main Inference Function (with hardcoded negative prompt) ---
+
+def b64_to_pil_list(b64_json_str):
+    if not b64_json_str or b64_json_str.strip() in ("", "[]"):
+        return []
+    try:
+        b64_list = json.loads(b64_json_str)
+    except Exception:
+        return []
+    pil_images = []
+    for b64_str in b64_list:
+        if not b64_str or not isinstance(b64_str, str):
+            continue
+        try:
+            if b64_str.startswith("data:image"):
+                _, data = b64_str.split(",", 1)
+            else:
+                data = b64_str
+            pil_images.append(Image.open(BytesIO(base64.b64decode(data))).convert("RGB"))
+        except Exception as e:
+            print(f"Error decoding image: {e}")
+    return pil_images
+
+# --- Main Inference Function ---
 def infer(
-    images,
+    images_b64_json,
     prompt,
     negative_prompt=" ",
     seed=42,
@@ -280,44 +292,13 @@ def infer(
     num_images_per_prompt=1,
     progress=gr.Progress(track_tqdm=True),
 ):
-    """
-    Run image-editing inference using the Qwen-Image-Edit pipeline.
-
-    Parameters:
-        images (list): Input images from the Gradio gallery (PIL or path-based).
-        prompt (str): Editing instruction.
-        seed (int): Random seed for reproducibility.
-        randomize_seed (bool): If True, overrides seed with a random value.
-        true_guidance_scale (float): CFG scale used by Qwen-Image.
-        num_inference_steps (int): Number of diffusion steps.
-        height (int | None): Optional output height override.
-        width (int | None): Optional output width override.
-        num_images_per_prompt (int): Number of images to generate.
-        progress: Gradio progress callback.
-
-    Returns:
-        tuple: (generated_images, seed_used, UI_visibility_update)
-    """
-    
     if randomize_seed:
         seed = random.randint(0, MAX_SEED)
 
-    # Set up the generator for reproducibility
     generator = torch.Generator(device=device).manual_seed(seed)
-    
-    # Load input images into PIL Images
-    pil_images = []
-    if images is not None:
-        for item in images:
-            try:
-                if isinstance(item[0], Image.Image):
-                    pil_images.append(item[0].convert("RGB"))
-                elif isinstance(item[0], str):
-                    pil_images.append(Image.open(item[0]).convert("RGB"))
-                elif hasattr(item, "name"):
-                    pil_images.append(Image.open(item.name).convert("RGB"))
-            except Exception:
-                continue
+    pil_images = b64_to_pil_list(images_b64_json)
+    if not pil_images:
+        raise gr.Error("Please upload at least one image.")
 
     if height==256 and width==256:
         height, width = None, None
@@ -340,11 +321,138 @@ def infer(
         num_images_per_prompt=num_images_per_prompt,
     ).images
 
-    # Return images, seed, and make button visible
-    return image, seed, gr.update(visible=True)
+    # Return images and seed
+    return image, seed
 
 # --- Examples and UI Layout ---
 examples = []
+
+gallery_js = r"""
+() => {
+function init() {
+    if (window.__picgenInitDone) return;
+    const galleryGrid  = document.getElementById('image-gallery-grid');
+    const dropZone     = document.getElementById('gallery-drop-zone');
+    const uploadPrompt = document.getElementById('upload-prompt');
+    const uploadClick  = document.getElementById('upload-click-area');
+    const fileInput    = document.getElementById('custom-file-input');
+    const btnUpload    = document.getElementById('tb-upload');
+    const btnRemove    = document.getElementById('tb-remove');
+    const btnClear     = document.getElementById('tb-clear');
+    if (!galleryGrid || !fileInput || !dropZone) { setTimeout(init, 250); return; }
+    window.__picgenInitDone = true;
+    let images = [];
+    window.__uploadedImages = images;
+    let selectedIdx = -1;
+
+    function syncToGradio() {
+        window.__uploadedImages = images;
+        const b64Array = images.map(img => img.b64);
+        const container = document.getElementById('hidden-images-b64');
+        if (!container) return;
+        container.querySelectorAll('input,textarea').forEach(el => {
+            const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const ns = Object.getOwnPropertyDescriptor(proto, 'value');
+            if (ns && ns.set) {
+                ns.set.call(el, JSON.stringify(b64Array));
+                el.dispatchEvent(new Event('input',  {bubbles:true, composed:true}));
+                el.dispatchEvent(new Event('change', {bubbles:true, composed:true}));
+            }
+        });
+    }
+
+    function addImage(b64, name) {
+        images.push({id: Date.now() + Math.random(), b64: b64, name: name});
+        renderGallery(); syncToGradio();
+    }
+    window.__addImage = addImage;
+
+    function removeImage(idx) {
+        images.splice(idx, 1);
+        if (selectedIdx === idx) selectedIdx = -1;
+        else if (selectedIdx > idx) selectedIdx--;
+        renderGallery(); syncToGradio();
+    }
+
+    function clearAll() {
+        images = []; window.__uploadedImages = images; selectedIdx = -1;
+        renderGallery(); syncToGradio();
+    }
+    window.__clearAll = clearAll;
+
+    function renderGallery() {
+        if (images.length === 0) {
+            galleryGrid.innerHTML = ''; galleryGrid.style.display = 'none';
+            if (uploadPrompt) uploadPrompt.style.display = '';
+            return;
+        }
+        if (uploadPrompt) uploadPrompt.style.display = 'none';
+        galleryGrid.style.display = 'grid';
+        let html = '';
+        images.forEach((img, i) => {
+            const sel = i === selectedIdx ? ' selected' : '';
+            html += '<div class="gallery-thumb' + sel + '" data-idx="' + i + '">'
+                  + '<img src="' + img.b64 + '" alt="' + (img.name||'image') + '">'
+                  + '<span class="thumb-badge">#' + (i+1) + '</span>'
+                  + '<button class="thumb-remove" data-remove="' + i + '">\u2715</button>'
+                  + '</div>';
+        });
+        html += '<div class="gallery-add-card" id="gallery-add-card"><span class="add-icon">+</span><span class="add-text">Add</span></div>';
+        galleryGrid.innerHTML = html;
+        galleryGrid.querySelectorAll('.gallery-thumb').forEach(thumb => {
+            thumb.addEventListener('click', (e) => {
+                if (e.target.closest('.thumb-remove')) return;
+                const idx = parseInt(thumb.dataset.idx);
+                showLightbox(images[idx].b64);
+            });
+        });
+        galleryGrid.querySelectorAll('.thumb-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); removeImage(parseInt(btn.dataset.remove)); });
+        });
+        const addCard = document.getElementById('gallery-add-card');
+        if (addCard) addCard.addEventListener('click', () => fileInput.click());
+    }
+
+    function showLightbox(b64) {
+        let lb = document.getElementById('picgen-lightbox');
+        if (!lb) {
+            lb = document.createElement('div');
+            lb.id = 'picgen-lightbox';
+            lb.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;';
+            lb.innerHTML = '<div style="position:relative;max-width:80vw;max-height:80vh;">'
+                + '<img id="picgen-lb-img" style="max-width:80vw;max-height:80vh;border-radius:8px;display:block;">'
+                + '<button id="picgen-lb-close" style="position:absolute;top:-14px;right:-14px;width:28px;height:28px;border-radius:50%;background:#e53e3e;color:#fff;border:none;cursor:pointer;font-size:16px;line-height:1;">✕</button>'
+                + '</div>';
+            document.body.appendChild(lb);
+            lb.addEventListener('click', (e) => { if (e.target === lb) lb.style.display = 'none'; });
+            document.getElementById('picgen-lb-close').addEventListener('click', () => lb.style.display = 'none');
+        }
+        document.getElementById('picgen-lb-img').src = b64;
+        lb.style.display = 'flex';
+    }
+
+    function processFiles(files) {
+        Array.from(files).forEach(file => {
+            if (!file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = (e) => addImage(e.target.result, file.name);
+            reader.readAsDataURL(file);
+        });
+    }
+
+    fileInput.addEventListener('change', (e) => { processFiles(e.target.files); e.target.value = ''; });
+    if (uploadClick) uploadClick.addEventListener('click', () => fileInput.click());
+    if (btnUpload) btnUpload.addEventListener('click', () => fileInput.click());
+    if (btnRemove) btnRemove.addEventListener('click', () => { if (selectedIdx >= 0) removeImage(selectedIdx); });
+    if (btnClear) btnClear.addEventListener('click', clearAll);
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files); });
+    renderGallery();
+}
+init();
+}
+"""
 
 css = """
 body, .gradio-container {
@@ -357,25 +465,80 @@ body, .gradio-container {
     max-width: 100% !important;
     padding: 0 !important;
 }
-.contain {
-    padding: 0 !important;
-}
+.contain { padding: 0 !important; }
 #preset-row {
     display: flex !important;
     align-items: center !important;
     gap: 8px !important;
 }
-#preset-row > * {
-    flex: 1 !important;
+#preset-row > * { flex: 1 !important; }
+#preset-row button { flex: 0 0 auto !important; min-width: 80px !important; }
+#preset-row input[type="text"] { pointer-events: none !important; user-select: none !important; }
+.hidden-input { display: none !important; height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
+
+#gallery-drop-zone {
+    position: relative;
+    min-height: 320px;
+    overflow: auto;
+    border: 1px solid var(--border-color-primary);
+    border-radius: 8px;
+    margin-bottom: 8px;
 }
-#preset-row button {
-    flex: 0 0 auto !important;
-    min-width: 80px !important;
+#gallery-drop-zone.drag-over { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.upload-prompt-modern { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; }
+.upload-click-area {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; padding: 36px 52px; border: 2px dashed var(--border-color-primary);
+    border-radius: 16px; transition: all .2s ease; gap: 8px;
 }
-#preset-row input[type="text"] {
-    pointer-events: none !important;
-    user-select: none !important;
+.upload-click-area:hover { border-color: var(--color-accent); transform: scale(1.03); }
+.upload-click-area svg { width: 64px; height: 64px; }
+.upload-main-text { font-size: 14px; font-weight: 500; margin-top: 4px; }
+.upload-sub-text { font-size: 12px; color: var(--body-text-color-subdued); }
+
+.image-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px; padding: 12px; align-content: start;
 }
+.gallery-thumb {
+    position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;
+    cursor: pointer; border: 2px solid var(--border-color-primary); transition: all .2s ease;
+}
+.gallery-thumb:hover { border-color: var(--color-accent); transform: translateY(-2px); }
+.gallery-thumb.selected { border-color: var(--color-accent) !important; box-shadow: 0 0 0 3px rgba(var(--color-accent-soft), .3); }
+.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb-badge {
+    position: absolute; top: 5px; left: 5px; background: var(--color-accent);
+    color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600;
+}
+.thumb-remove {
+    position: absolute; top: 5px; right: 5px; width: 22px; height: 22px;
+    background: rgba(0,0,0,.7); color: #fff; border: 1px solid rgba(255,255,255,.2);
+    border-radius: 50%; cursor: pointer; display: none; align-items: center;
+    justify-content: center; font-size: 11px; transition: all .15s; line-height: 1;
+}
+.gallery-thumb:hover .thumb-remove { display: flex; }
+.thumb-remove:hover { background: #e53e3e; }
+.gallery-add-card {
+    aspect-ratio: 1; border-radius: 8px; border: 2px dashed var(--border-color-primary);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: all .2s ease; gap: 4px;
+}
+.gallery-add-card:hover { border-color: var(--color-accent); }
+.gallery-add-card .add-icon { font-size: 26px; font-weight: 300; }
+.gallery-add-card .add-text { font-size: 12px; font-weight: 500; }
+
+.uploader-toolbar {
+    display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap;
+}
+.tb-btn {
+    display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px;
+    border: 1px solid var(--border-color-primary); border-radius: 6px;
+    background: var(--background-fill-secondary); cursor: pointer;
+    font-size: 12px; font-weight: 500; transition: all .15s;
+}
+.tb-btn:hover { border-color: var(--color-accent); }
 """
 
 with gr.Blocks() as demo:
@@ -579,10 +742,29 @@ with gr.Blocks() as demo:
         
         with gr.Row():
             with gr.Column():
-                input_images = gr.Gallery(label="Input Images", 
-                                          show_label=False, 
-                                          type="pil", 
-                                          interactive=True)
+                hidden_images_b64 = gr.Textbox(value="[]", elem_id="hidden-images-b64", elem_classes="hidden-input", container=False, visible=False)
+                gr.HTML("""
+                <div class="uploader-toolbar">
+                    <button id="tb-upload" class="tb-btn">⬆ Upload</button>
+                    <button id="tb-remove" class="tb-btn">✕ Remove Selected</button>
+                    <button id="tb-clear" class="tb-btn">🗑 Clear All</button>
+                </div>
+                <div id="gallery-drop-zone">
+                    <div id="upload-prompt" class="upload-prompt-modern">
+                        <div id="upload-click-area" class="upload-click-area">
+                            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="6" y="10" width="52" height="44" rx="5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"/>
+                                <polygon points="10,50 24,32 34,42 44,28 54,50" fill="rgba(128,128,128,0.15)" stroke="currentColor" stroke-width="1.5"/>
+                                <circle cx="22" cy="24" r="5" fill="rgba(128,128,128,0.2)" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                            <span class="upload-main-text">Click or drag images here</span>
+                            <span class="upload-sub-text">Supports multiple images</span>
+                        </div>
+                    </div>
+                    <input id="custom-file-input" type="file" accept="image/*" multiple style="display:none;" />
+                    <div id="image-gallery-grid" class="image-gallery-grid" style="display:none;"></div>
+                </div>
+                """)
 
             with gr.Column():
                 result = gr.Gallery(label="Result", show_label=False, type="pil", interactive=False)
@@ -888,7 +1070,7 @@ with gr.Blocks() as demo:
         triggers=[run_button.click, run_button_top.click, run_button_top2.click, run_button_top3.click, run_button_top4.click, prompt.submit],
         fn=infer,
         inputs=[
-            input_images,
+            hidden_images_b64,
             prompt,
             negative_prompt,
             seed,
@@ -899,22 +1081,42 @@ with gr.Blocks() as demo:
             width,
             num_images_per_prompt,
         ],
-        outputs=[result, seed, use_output_btn],
+        js="(...args) => { const imgs = window.__uploadedImages || []; const b64 = JSON.stringify(imgs.map(i => i.b64)); args[0] = b64; return args; }",
+        outputs=[result, seed],
     )
 
-    # Add the new event handler for the "Use Output as Input" button
-    use_output_btn.click(
-        fn=use_output_as_input,
-        inputs=[result],
-        outputs=[input_images]
-    )
-    
+    # Use output as input — encode result images back to b64 JSON
+    def output_to_b64(output_images):
+        if not output_images:
+            return "[]"
+        b64_list = []
+        for item in output_images:
+            try:
+                img = item[0] if isinstance(item, (list, tuple)) else item
+                buf = BytesIO()
+                img.save(buf, format="PNG")
+                b64_list.append("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode())
+            except Exception:
+                continue
+        return json.dumps(b64_list)
+
+    use_output_btn.click(fn=output_to_b64, inputs=[result], outputs=[hidden_images_b64])
+
     # Starter image button handlers
-    start1_btn.click(fn=lambda imgs: add_starter_image(1, imgs), inputs=[input_images], outputs=[input_images])
-    start2_btn.click(fn=lambda imgs: add_starter_image(2, imgs), inputs=[input_images], outputs=[input_images])
-    start3_btn.click(fn=lambda imgs: add_starter_image(3, imgs), inputs=[input_images], outputs=[input_images])
-    start4_btn.click(fn=lambda imgs: add_starter_image(4, imgs), inputs=[input_images], outputs=[input_images])
+    starter_b64_output = gr.Textbox(value="", visible=False, elem_id="starter-b64-output")
 
+    def get_starter_b64(num):
+        return add_starter_image(num)
+
+    start1_btn.click(fn=lambda: get_starter_b64(1), inputs=[], outputs=[starter_b64_output])
+    start2_btn.click(fn=lambda: get_starter_b64(2), inputs=[], outputs=[starter_b64_output])
+    start3_btn.click(fn=lambda: get_starter_b64(3), inputs=[], outputs=[starter_b64_output])
+    start4_btn.click(fn=lambda: get_starter_b64(4), inputs=[], outputs=[starter_b64_output])
+
+    starter_b64_output.change(
+        fn=None, inputs=[starter_b64_output], outputs=None,
+        js="(b64) => { if (b64 && window.__addImage) window.__addImage(b64, 'starter.jpg'); }"
+    )
     # Preset handler for negative prompts
     def update_negative_prompt(preset):
         presets = {
@@ -994,5 +1196,8 @@ with gr.Blocks() as demo:
         """
     )
 
+    demo.load(fn=None, js=gallery_js)
+
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=False, css=css)
+    os.makedirs(os.path.join(SCRIPT_DIR, "tmp"), exist_ok=True)
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=False, css=css, allowed_paths=[SCRIPT_DIR])
