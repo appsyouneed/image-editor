@@ -13,19 +13,16 @@ echo "Creating cache directory..."
 mkdir -p /root/.cache/huggingface
 
 echo "Installing system dependencies..."
-apt-get update && apt-get install -y python3-pip python3-venv ffmpeg wget git git-lfs bc curl
-
-echo "Upgrading pip..."
-pip3 install --upgrade pip setuptools wheel --break-system-packages
+apt-get update && apt-get install -y python3-pip ffmpeg wget git git-lfs bc curl
 
 echo "Installing PyTorch with CUDA 12.4 support..."
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --break-system-packages --ignore-installed
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --ignore-installed
 
 echo "Installing Python dependencies..."
-pip3 install -r "$SCRIPT_DIR/requirements.txt" --break-system-packages --ignore-installed
+pip3 install -r "$SCRIPT_DIR/requirements.txt" --ignore-installed
 
 echo "Installing Hugging Face CLI..."
-pip3 install "huggingface_hub[cli]" --break-system-packages
+pip3 install "huggingface_hub[cli]"
 
 echo "Creating local model directories..."
 mkdir -p "$SCRIPT_DIR/models/Qwen-Image-Edit-2511"
