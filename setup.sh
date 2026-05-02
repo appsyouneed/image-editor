@@ -11,12 +11,6 @@ if [ "$EUID" -ne 0 ]; then
     exec sudo bash "$0" "$@"
 fi
 
-UBUNTU_VER=$(lsb_release -rs)
-if (( $(echo "$UBUNTU_VER < 24" | bc -l) )); then
-    echo "Ubuntu $UBUNTU_VER detected: upgrading pip first..."
-    pip3 install --upgrade pip
-fi
-
 echo "Installing system dependencies..."
 apt-get update && apt-get install -y python3-pip ffmpeg wget git git-lfs bc curl
 
@@ -43,12 +37,7 @@ else
 fi
 
 # Upgrade pip only if needed
-if python3 -m pip install --upgrade pip --dry-run --break-system-packages 2>&1 | grep -q "Would install"; then
-    echo "Upgrading pip..."
-    python3 -m pip install --upgrade pip --break-system-packages
-else
-    echo "pip already up to date, skipping."
-fi
+
 
 echo "Installing PyTorch with CUDA 12.8 support..."
 pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu128 --ignore-installed --break-system-packages
