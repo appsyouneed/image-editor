@@ -18,15 +18,10 @@ if (( $(echo "$UBUNTU_VER < 24" | bc -l) )); then
 fi
 
 echo "Installing system dependencies..."
-apt-get update && apt-get install -y python3-pip python3-venv ffmpeg wget git git-lfs bc curl
+apt-get update && apt-get install -y python3-pip ffmpeg wget git git-lfs bc curl
 
 echo "Creating cache directory..."
 mkdir -p /root/.cache/huggingface
-
-echo "Creating Python virtual environment..."
-rm -rf "$SCRIPT_DIR/venv"
-python3 -m venv "$SCRIPT_DIR/venv"
-source "$SCRIPT_DIR/venv/bin/activate"
 
 # --- CUDA 12.4 Toolkit (if not already installed) ---
 if ! command -v nvcc &> /dev/null; then
@@ -56,16 +51,16 @@ else
 fi
 
 echo "Installing PyTorch with CUDA 12.8 support..."
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128 --ignore-installed
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu128 --ignore-installed
 
 echo "Installing Python dependencies..."
-pip install -r "$SCRIPT_DIR/requirements.txt" --ignore-installed
+pip3 install -r "$SCRIPT_DIR/requirements.txt" --ignore-installed
 
 echo "Installing Hugging Face CLI..."
-pip install "huggingface_hub[cli]>=1.5.0"
+pip3 install "huggingface_hub[cli]>=1.5.0"
 
 echo "Fixing pyOpenSSL compatibility..."
-python3 -c "from OpenSSL import SSL" 2>/dev/null || pip install --upgrade pyopenssl
+python3 -c "from OpenSSL import SSL" 2>/dev/null || pip3 install --upgrade pyopenssl
 
 echo "Creating local model directories..."
 mkdir -p "$SCRIPT_DIR/models/Qwen-Image-Edit-2511"
@@ -108,7 +103,7 @@ Environment="PYTHONUNBUFFERED=1"
 Environment="HF_HOME=/root/.cache/huggingface"
 Environment="PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True"
 Environment="CUDA_LAUNCH_BLOCKING=0"
-ExecStart=$SCRIPT_DIR/venv/bin/python $SCRIPT_DIR/app.py
+ExecStart=/usr/bin/python3 $SCRIPT_DIR/app.py
 Restart=always
 RestartSec=10
 StandardOutput=append:$SCRIPT_DIR/picgen.log
