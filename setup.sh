@@ -18,8 +18,12 @@ dpkg -i cuda-keyring_1.1-1_all.deb
 rm cuda-keyring_1.1-1_all.deb
 apt-get update
 apt-get install -y cuda-toolkit-12-1
-echo 'export PATH=/usr/local/cuda-12.1/bin:$PATH' >> /etc/environment
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:$LD_LIBRARY_PATH' >> /etc/environment
+
+# Set CUDA paths persistently (idempotent — overwrites same file each run)
+cat > /etc/profile.d/cuda.sh <<'CUDAEOF'
+export PATH=/usr/local/cuda-12.1/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:$LD_LIBRARY_PATH
+CUDAEOF
 export PATH=/usr/local/cuda-12.1/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:$LD_LIBRARY_PATH
 
@@ -34,13 +38,10 @@ echo "Creating cache directory..."
 mkdir -p /root/.cache/huggingface
 
 echo "Installing PyTorch with CUDA 12.1 support..."
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
 
 echo "Installing Python dependencies..."
 pip install -r "$SCRIPT_DIR/requirements.txt"
-
-echo "Installing Hugging Face CLI..."
-pip install "huggingface_hub[cli]>=1.5.0"
 
 echo "Creating local model directories..."
 mkdir -p "$SCRIPT_DIR/models/Qwen-Image-Edit-2511"
@@ -63,11 +64,9 @@ if torch.cuda.is_available():
     total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
     print(f'Total VRAM: {total_vram:.1f}GB')
 else:
-    print('GPU Device: None (CPU mode)')
+    print('WARNING: CUDA not available — check driver installation')
 "
 
-echo "=== Setup Complete ==="
-echo ""
 echo "Setting up systemd service..."
 
 cat > /etc/systemd/system/picgen.service <<EOF
@@ -83,6 +82,8 @@ Environment="PYTHONUNBUFFERED=1"
 Environment="HF_HOME=/root/.cache/huggingface"
 Environment="PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True"
 Environment="CUDA_LAUNCH_BLOCKING=0"
+Environment="PATH=/usr/local/cuda-12.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64"
 ExecStart=$SCRIPT_DIR/venv/bin/python3 $SCRIPT_DIR/app.py
 Restart=always
 RestartSec=10

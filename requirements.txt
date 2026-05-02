@@ -1,6 +1,5 @@
-# Core dependencies
-torch==2.5.1
-torchvision==0.20.1
+# torch and torchvision are installed separately via cu121 index in setup.sh
+# DO NOT add torch/torchvision here — pip would reinstall CPU versions from PyPI
 
 # Diffusers
 diffusers==0.33.1
@@ -18,10 +17,10 @@ numpy==2.2.5
 
 # UI and utilities
 gradio==5.29.1
-huggingface_hub==0.30.2
+huggingface_hub[cli]==0.32.3
 tqdm==4.67.1
 typing-extensions==4.13.2
 
 # Additional dependencies
 dashscope==1.22.1
-kernels==0.4.1
+kernels==0.13.0
