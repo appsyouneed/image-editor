@@ -14,8 +14,7 @@ try:
     from diffusers import QwenImageEditPlusPipeline
 except ImportError:
     from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
-from torchao.quantization import quantize_, Int8WeightOnlyConfig, Float8DynamicActivationFloat8WeightConfig
-# from optimization import optimize_pipeline_
+from torchao.quantization import quantize_, Int8WeightOnlyConfig, Float8DynamicActivationFloat8WeightConfig# from optimization import optimize_pipeline_
 # from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
 # from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
 # from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
@@ -64,44 +63,6 @@ print("Clearing GPU memory from previous runs...")
 clear_vram()
 if torch.cuda.is_available():
     torch.cuda.reset_peak_memory_stats()
-
-# --- Intelligent memory management (works on any GPU) ---
-def setup_intelligent_memory_pipeline(pipe, apply_quantization=True):
-    if not torch.cuda.is_available():
-        print("No GPU detected - using CPU only")
-        return pipe
-    clear_vram()
-    total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
-    print(f"Total VRAM: {total_vram:.1f}GB")
-    if apply_quantization:
-        print("Applying quantization on CPU...")
-        if hasattr(pipe, 'text_encoder') and pipe.text_encoder is not None:
-            quantize_(pipe.text_encoder, Int8WeightOnlyConfig())
-        if hasattr(pipe, 'transformer') and pipe.transformer is not None:
-            quantize_(pipe.transformer, Float8DynamicActivationFloat8WeightConfig())
-    print("Enabling VAE slicing and tiling...")
-    if hasattr(pipe, 'vae'):
-        pipe.vae.enable_slicing()
-        pipe.vae.enable_tiling()
-    if total_vram >= 40:
-        print("High VRAM GPU: Loading fully on GPU")
-        if hasattr(pipe, 'text_encoder') and pipe.text_encoder is not None:
-            pipe.text_encoder = pipe.text_encoder.to('cuda')
-        clear_vram()
-        if hasattr(pipe, 'transformer') and pipe.transformer is not None:
-            pipe.transformer = pipe.transformer.to('cuda')
-        clear_vram()
-        if hasattr(pipe, 'vae') and pipe.vae is not None:
-            pipe.vae = pipe.vae.to('cuda')
-        clear_vram()
-    elif total_vram >= 16:
-        print("Mid-range GPU: Using model CPU offloading")
-        pipe.enable_model_cpu_offload()
-    else:
-        print("Low VRAM GPU: Using sequential CPU offloading")
-        pipe.enable_sequential_cpu_offload()
-    return pipe
 
 # --- Model Loading ---
 dtype = torch.bfloat16
@@ -258,7 +219,7 @@ if torch.cuda.is_available():
     torch.cuda.empty_cache()
 
 print("Applying memory optimizations after weight injection...")
-pipe = setup_intelligent_memory_pipeline(pipe, apply_quantization=True)
+pipe = pipe.to("cuda")
 
 
 #################################
