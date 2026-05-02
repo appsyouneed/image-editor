@@ -1,27 +1,27 @@
 # Core dependencies
-torch
-torchvision
+torch==2.5.1
+torchvision==0.20.1
 
 # Diffusers
-diffusers
+diffusers==0.33.1
 
 # Transformers and model dependencies
-transformers
-accelerate
-safetensors
-sentencepiece
-peft
+transformers==4.51.3
+accelerate==1.6.0
+safetensors==0.5.3
+sentencepiece==0.2.0
+peft==0.15.2
 
 # Image processing
-Pillow
-numpy
+Pillow==11.2.1
+numpy==2.2.5
 
 # UI and utilities
-gradio
-huggingface_hub
-tqdm
-typing-extensions
+gradio==5.29.1
+huggingface_hub==0.30.2
+tqdm==4.67.1
+typing-extensions==4.13.2
 
 # Additional dependencies
-dashscope
-kernels
+dashscope==1.22.1
+kernels==0.4.1

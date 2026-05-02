@@ -128,7 +128,6 @@ if not os.path.exists(NSFW_WEIGHTS_LOCAL_PATH):
         filename="v23/Qwen-Rapid-AIO-NSFW-v23.safetensors",
         cache_dir=MODELS_DIR,
         local_dir=os.path.join(MODELS_DIR, "rapid-aio"),
-        local_dir_use_symlinks=False,
     )
 else:
     print(f"Loading from local path: {NSFW_WEIGHTS_LOCAL_PATH}")
@@ -768,7 +767,7 @@ with gr.Blocks() as demo:
 
             with gr.Column():
                 result = gr.Gallery(label="Result", show_label=False, type="pil", interactive=False)
-                use_output_btn = gr.Button("↗️ Use as input", variant="secondary", size="sm", visible=False)
+                use_output_btn = gr.Button("↗️ Use as input", variant="secondary", size="sm", visible=True)
 
         with gr.Row():
             prompt = gr.Textbox(

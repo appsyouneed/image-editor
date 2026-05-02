@@ -3,31 +3,44 @@ set -e
 
 echo "=== Picgen Image Editor VPS Setup ==="
 
-# Detect script directory (works regardless of where it's run from)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Auto sudo if not root
 if [ "$EUID" -ne 0 ]; then
     exec sudo bash "$0" "$@"
 fi
 
 echo "Installing system dependencies..."
-apt-get update && apt-get install -y python3-pip ffmpeg wget git git-lfs bc curl
+apt-get update && apt-get install -y python3-pip python3-venv ffmpeg wget git git-lfs bc curl software-properties-common
+
+echo "Installing CUDA 12.1 toolkit..."
+wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+dpkg -i cuda-keyring_1.1-1_all.deb
+rm cuda-keyring_1.1-1_all.deb
+apt-get update
+apt-get install -y cuda-toolkit-12-1
+echo 'export PATH=/usr/local/cuda-12.1/bin:$PATH' >> /etc/environment
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:$LD_LIBRARY_PATH' >> /etc/environment
+export PATH=/usr/local/cuda-12.1/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:$LD_LIBRARY_PATH
+
+echo "Creating Python virtual environment..."
+python3 -m venv "$SCRIPT_DIR/venv"
+source "$SCRIPT_DIR/venv/bin/activate"
+
+echo "Upgrading pip..."
+pip install --upgrade pip setuptools wheel
 
 echo "Creating cache directory..."
 mkdir -p /root/.cache/huggingface
 
-echo "Installing PyTorch with CUDA 12.8 support..."
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu128 --break-system-packages
+echo "Installing PyTorch with CUDA 12.1 support..."
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 echo "Installing Python dependencies..."
-pip3 install -r "$SCRIPT_DIR/requirements.txt" --ignore-installed --break-system-packages
+pip install -r "$SCRIPT_DIR/requirements.txt"
 
 echo "Installing Hugging Face CLI..."
-pip3 install "huggingface_hub[cli]>=1.5.0" --break-system-packages
-
-echo "Fixing pyOpenSSL compatibility..."
-python3 -c "from OpenSSL import SSL" 2>/dev/null || pip3 install --upgrade pyopenssl --break-system-packages
+pip install "huggingface_hub[cli]>=1.5.0"
 
 echo "Creating local model directories..."
 mkdir -p "$SCRIPT_DIR/models/Qwen-Image-Edit-2511"
@@ -37,11 +50,12 @@ chmod -R 777 "$SCRIPT_DIR/models"
 echo "=== Model Download ==="
 echo "Models will be downloaded automatically on first run."
 echo "To pre-download models now, run:"
+echo "  source $SCRIPT_DIR/venv/bin/activate"
 echo "  huggingface-cli download Qwen/Qwen-Image-Edit-2511 --local-dir $SCRIPT_DIR/models/Qwen-Image-Edit-2511"
 echo "  huggingface-cli download Phr00t/Qwen-Image-Edit-Rapid-AIO --include 'v23/Qwen-Rapid-AIO-NSFW-v23.safetensors' --local-dir $SCRIPT_DIR/models/rapid-aio"
 
 echo "Verifying GPU accessibility..."
-python3 -c "
+"$SCRIPT_DIR/venv/bin/python3" -c "
 import torch
 print(f'CUDA Available: {torch.cuda.is_available()}')
 if torch.cuda.is_available():
@@ -56,7 +70,6 @@ echo "=== Setup Complete ==="
 echo ""
 echo "Setting up systemd service..."
 
-# Write service file dynamically with correct paths
 cat > /etc/systemd/system/picgen.service <<EOF
 [Unit]
 Description=Picgen Image Editor Application
@@ -70,7 +83,7 @@ Environment="PYTHONUNBUFFERED=1"
 Environment="HF_HOME=/root/.cache/huggingface"
 Environment="PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True"
 Environment="CUDA_LAUNCH_BLOCKING=0"
-ExecStart=/usr/bin/python3 $SCRIPT_DIR/app.py
+ExecStart=$SCRIPT_DIR/venv/bin/python3 $SCRIPT_DIR/app.py
 Restart=always
 RestartSec=10
 StandardOutput=append:$SCRIPT_DIR/picgen.log
@@ -94,5 +107,5 @@ echo ""
 echo "View live output:"
 echo "  tail -f $SCRIPT_DIR/picgen.log"
 echo ""
-echo "To run manually: python3 $SCRIPT_DIR/app.py"
+echo "To run manually: $SCRIPT_DIR/venv/bin/python3 $SCRIPT_DIR/app.py"
 echo "The app will be accessible at: http://0.0.0.0:7860"
