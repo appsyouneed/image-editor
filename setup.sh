@@ -43,24 +43,24 @@ else
 fi
 
 # Upgrade pip only if needed
-if python3 -m pip install --upgrade pip --dry-run 2>&1 | grep -q "Would install"; then
+if python3 -m pip install --upgrade pip --dry-run --break-system-packages 2>&1 | grep -q "Would install"; then
     echo "Upgrading pip..."
-    python3 -m pip install --upgrade pip
+    python3 -m pip install --upgrade pip --break-system-packages
 else
     echo "pip already up to date, skipping."
 fi
 
 echo "Installing PyTorch with CUDA 12.8 support..."
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu128 --ignore-installed
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu128 --ignore-installed --break-system-packages
 
 echo "Installing Python dependencies..."
-pip3 install -r "$SCRIPT_DIR/requirements.txt" --ignore-installed
+pip3 install -r "$SCRIPT_DIR/requirements.txt" --ignore-installed --break-system-packages
 
 echo "Installing Hugging Face CLI..."
-pip3 install "huggingface_hub[cli]>=1.5.0"
+pip3 install "huggingface_hub[cli]>=1.5.0" --break-system-packages
 
 echo "Fixing pyOpenSSL compatibility..."
-python3 -c "from OpenSSL import SSL" 2>/dev/null || pip3 install --upgrade pyopenssl
+python3 -c "from OpenSSL import SSL" 2>/dev/null || pip3 install --upgrade pyopenssl --break-system-packages
 
 echo "Creating local model directories..."
 mkdir -p "$SCRIPT_DIR/models/Qwen-Image-Edit-2511"
