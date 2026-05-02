@@ -23,4 +23,3 @@ typing-extensions==4.13.2
 
 # Additional dependencies
 dashscope==1.22.1
-kernels==0.13.0
