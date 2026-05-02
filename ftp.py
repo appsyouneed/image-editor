@@ -2,11 +2,8 @@ import subprocess
 import sys
 import os
 
-def pip_install(pkg):
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg, "--break-system-packages", "-q"])
-    except subprocess.CalledProcessError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg, "-q"])
+def pip_install(*pkgs):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q"] + list(pkgs))
 
 try:
     from pyftpdlib.authorizers import DummyAuthorizer
@@ -14,7 +11,7 @@ try:
     from pyftpdlib.servers import FTPServer
 except (ImportError, AttributeError):
     print("Installing/fixing dependencies...")
-    pip_install("pyopenssl --upgrade")
+    pip_install("--upgrade", "pyopenssl")
     pip_install("pyftpdlib")
     from pyftpdlib.authorizers import DummyAuthorizer
     from pyftpdlib.handlers import FTPHandler
