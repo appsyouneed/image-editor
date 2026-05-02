@@ -3,6 +3,31 @@ import numpy as np
 import random
 import torch
 
+# Patch transformers GenerationConfig bug where decoder_config is a plain dict
+# but code calls .to_dict() on it (affects transformers 4.49-4.51)
+try:
+    from transformers.generation import configuration_utils as _gc
+    _orig = _gc.GenerationConfig.from_model_config.__func__
+    @classmethod
+    def _patched_from_model_config(cls, model_config):
+        import transformers.generation.configuration_utils as m
+        _real = getattr(m, '_orig_from_model_config', None)
+        if _real:
+            return _real(cls, model_config)
+        return cls()
+    # Minimal targeted patch: fix decoder_config.to_dict() call
+    import transformers.generation.configuration_utils as _gcm
+    _src = open(_gcm.__file__).read()
+    if 'decoder_config_dict = decoder_config.to_dict()' in _src:
+        import types
+        _fixed = _src.replace(
+            'decoder_config_dict = decoder_config.to_dict()',
+            'decoder_config_dict = decoder_config.to_dict() if hasattr(decoder_config, "to_dict") else decoder_config'
+        )
+        exec(compile(_fixed, _gcm.__file__, 'exec'), _gcm.__dict__)
+except Exception:
+    pass
+
 import gc
 
 from safetensors.torch import load_file

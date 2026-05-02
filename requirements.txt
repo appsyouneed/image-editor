@@ -1,15 +1,16 @@
 # torch and torchvision are installed separately via cu121 index in setup.sh
 # DO NOT add torch/torchvision here — pip would reinstall CPU versions from PyPI
 
-# Diffusers
-diffusers==0.33.1
+# Diffusers — 0.34.0+ required for QwenImageEditPlusPipeline, QwenImageLoraLoaderMixin,
+# AutoencoderKLQwenImage, QwenImageTransformer2DModel, AttentionMixin, CacheMixin, dispatch_attention_fn
+diffusers==0.38.0
 
-# Transformers and model dependencies
-transformers==4.51.3
+# Transformers — 4.49.0 required: 4.50+ has GenerationConfig regression breaking Qwen2_5_VL
+transformers==4.49.0
 accelerate==1.6.0
 safetensors==0.5.3
 sentencepiece==0.2.0
-peft==0.15.2
+peft==0.17.0
 
 # Image processing
 Pillow==11.2.1
