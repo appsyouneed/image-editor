@@ -3,31 +3,6 @@ import numpy as np
 import random
 import torch
 
-# Patch transformers GenerationConfig bug where decoder_config is a plain dict
-# but code calls .to_dict() on it (affects transformers 4.49-4.51)
-try:
-    from transformers.generation import configuration_utils as _gc
-    _orig = _gc.GenerationConfig.from_model_config.__func__
-    @classmethod
-    def _patched_from_model_config(cls, model_config):
-        import transformers.generation.configuration_utils as m
-        _real = getattr(m, '_orig_from_model_config', None)
-        if _real:
-            return _real(cls, model_config)
-        return cls()
-    # Minimal targeted patch: fix decoder_config.to_dict() call
-    import transformers.generation.configuration_utils as _gcm
-    _src = open(_gcm.__file__).read()
-    if 'decoder_config_dict = decoder_config.to_dict()' in _src:
-        import types
-        _fixed = _src.replace(
-            'decoder_config_dict = decoder_config.to_dict()',
-            'decoder_config_dict = decoder_config.to_dict() if hasattr(decoder_config, "to_dict") else decoder_config'
-        )
-        exec(compile(_fixed, _gcm.__file__, 'exec'), _gcm.__dict__)
-except Exception:
-    pass
-
 import gc
 
 from safetensors.torch import load_file
@@ -39,6 +14,7 @@ try:
     from diffusers import QwenImageEditPlusPipeline
 except ImportError:
     from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
+from torchao.quantization import quantize_, Int8WeightOnlyConfig, Float8DynamicActivationFloat8WeightConfig
 # from optimization import optimize_pipeline_
 # from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
 # from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
@@ -84,7 +60,48 @@ def clear_vram():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
 
+print("Clearing GPU memory from previous runs...")
 clear_vram()
+if torch.cuda.is_available():
+    torch.cuda.reset_peak_memory_stats()
+
+# --- Intelligent memory management (works on any GPU) ---
+def setup_intelligent_memory_pipeline(pipe, apply_quantization=True):
+    if not torch.cuda.is_available():
+        print("No GPU detected - using CPU only")
+        return pipe
+    clear_vram()
+    total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(f"Total VRAM: {total_vram:.1f}GB")
+    if apply_quantization:
+        print("Applying quantization on CPU...")
+        if hasattr(pipe, 'text_encoder') and pipe.text_encoder is not None:
+            quantize_(pipe.text_encoder, Int8WeightOnlyConfig())
+        if hasattr(pipe, 'transformer') and pipe.transformer is not None:
+            quantize_(pipe.transformer, Float8DynamicActivationFloat8WeightConfig())
+    print("Enabling VAE slicing and tiling...")
+    if hasattr(pipe, 'vae'):
+        pipe.vae.enable_slicing()
+        pipe.vae.enable_tiling()
+    if total_vram >= 40:
+        print("High VRAM GPU: Loading fully on GPU")
+        if hasattr(pipe, 'text_encoder') and pipe.text_encoder is not None:
+            pipe.text_encoder = pipe.text_encoder.to('cuda')
+        clear_vram()
+        if hasattr(pipe, 'transformer') and pipe.transformer is not None:
+            pipe.transformer = pipe.transformer.to('cuda')
+        clear_vram()
+        if hasattr(pipe, 'vae') and pipe.vae is not None:
+            pipe.vae = pipe.vae.to('cuda')
+        clear_vram()
+    elif total_vram >= 16:
+        print("Mid-range GPU: Using model CPU offloading")
+        pipe.enable_model_cpu_offload()
+    else:
+        print("Low VRAM GPU: Using sequential CPU offloading")
+        pipe.enable_sequential_cpu_offload()
+    return pipe
 
 # --- Model Loading ---
 dtype = torch.bfloat16
@@ -125,9 +142,8 @@ if not os.path.exists(model_index_path):
     pipe = QwenImageEditPlusPipeline.from_pretrained(
         "Qwen/Qwen-Image-Edit-2511",
         torch_dtype=torch.bfloat16,
-        cache_dir=MODELS_DIR,
+        cache_dir=BASE_MODEL_LOCAL_PATH,
     )
-    pipe.save_pretrained(BASE_MODEL_LOCAL_PATH)
 else:
     print(f"Loading from local path: {BASE_MODEL_LOCAL_PATH}")
     pipe = QwenImageEditPlusPipeline.from_pretrained(
@@ -135,8 +151,6 @@ else:
         torch_dtype=torch.bfloat16,
         local_files_only=True,
     )
-
-pipe = pipe.to("cuda")
 
 # force euler ancestral scheduler
 #pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
@@ -235,13 +249,16 @@ if len(text_encoder_weights) > 0:
     pipe.text_encoder.load_state_dict(text_encoder_weights, strict=False)
 
 # 5. CLEANUP & APPLY MEMORY MANAGEMENT
-# ------------------------------------------------------------------------------
 del state_dict
 del transformer_weights
 del vae_weights
 del text_encoder_weights
 gc.collect()
-torch.cuda.empty_cache()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+
+print("Applying memory optimizations after weight injection...")
+pipe = setup_intelligent_memory_pipeline(pipe, apply_quantization=True)
 
 
 #################################

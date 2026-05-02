@@ -1,26 +1,28 @@
-# torch and torchvision are installed separately via cu121 index in setup.sh
-# DO NOT add torch/torchvision here — pip would reinstall CPU versions from PyPI
+# Core dependencies - install first
+torch
+torchvision
+torchao==0.11.0
+torchao==0.11.0
 
-# Diffusers — 0.34.0+ required for QwenImageEditPlusPipeline, QwenImageLoraLoaderMixin,
-# AutoencoderKLQwenImage, QwenImageTransformer2DModel, AttentionMixin, CacheMixin, dispatch_attention_fn
-diffusers==0.38.0
+# Diffusers - stable version
+diffusers
 
-# Transformers — 4.49.0 required: 4.50+ has GenerationConfig regression breaking Qwen2_5_VL
-transformers==4.49.0
-accelerate==1.6.0
-safetensors==0.5.3
-sentencepiece==0.2.0
-peft==0.17.0
+# Transformers and model dependencies
+transformers
+accelerate
+safetensors
+sentencepiece
+peft
 
 # Image processing
-Pillow==11.2.1
-numpy==2.2.5
+Pillow
+numpy
 
 # UI and utilities
-gradio==5.29.1
-huggingface_hub[cli]==0.32.3
-tqdm==4.67.1
-typing-extensions==4.13.2
+gradio
+huggingface_hub
+tqdm
+typing-extensions
 
 # Additional dependencies
-dashscope==1.22.1
+dashscope
